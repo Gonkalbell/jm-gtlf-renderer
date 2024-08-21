@@ -411,11 +411,11 @@ fn generate_meshes(
                     .unwrap_or(format.size());
                 attrib_layouts.push((
                     stride,
-                    [wgpu::VertexAttribute {
+                    wgpu::VertexAttribute {
                         format,
                         offset: accessor.offset() as _,
                         shader_location,
-                    }],
+                    },
                 ));
 
                 attrib_buffers.push(buffers[buffer_view.index()].clone());
@@ -428,7 +428,7 @@ fn generate_meshes(
                 .map(|(array_stride, attributes)| wgpu::VertexBufferLayout {
                     array_stride: *array_stride,
                     step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes,
+                    attributes: std::slice::from_ref(attributes),
                 })
                 .collect();
 

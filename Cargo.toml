@@ -19,14 +19,14 @@ serde = { version = "1", features = ["derive"] }
 puffin = { version = "0.19.1", features = ["web"] }
 puffin_egui = "0.29.0"
 bytemuck = { version = "1.16.3", features = ["derive"] }
-glam = { version = "0.28.0", features = ["bytemuck", "serde"] }
+glam = { version = "0.29.0", features = ["bytemuck", "serde"] }
 ktx2 = "0.3.0"
 wgpu = "0.20.1"
 gltf = { version = "1.4.1", features = ["KHR_lights_punctual", "extensions", "extras"] }
 
 [build-dependencies]
 miette = { version = "7.2.0", features = ["fancy"] }
-wgsl_bindgen = "0.15.0"
+wgsl_bindgen = "0.15.1"
 
 
 # native:
