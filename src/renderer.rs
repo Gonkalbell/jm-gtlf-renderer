@@ -198,6 +198,7 @@ impl SceneRenderer {
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         // Load the GLTF scene
@@ -275,7 +276,7 @@ impl SceneRenderer {
         None
     }
 
-    pub fn render<'a>(&'a self, rpass: &mut wgpu::RenderPass<'a>) {
+    pub fn render(&self, rpass: &mut wgpu::RenderPass) {
         profile_function!();
 
         self.camera_bgroup.set(rpass);
@@ -331,8 +332,6 @@ impl SceneRenderer {
                 }
                 ui.menu_button("Camera", |ui| self.user_camera.run_ui(ui));
             });
-
-            puffin_egui::show_viewport_if_enabled(ctx);
         });
     }
 }
@@ -437,7 +436,7 @@ fn generate_meshes(
                 layout: Some(&scene::create_pipeline_layout(device)),
                 vertex: wgpu::VertexState {
                     module: &shader,
-                    entry_point: scene::ENTRY_VS_SCENE,
+                    entry_point: Some(scene::ENTRY_VS_SCENE),
                     compilation_options: Default::default(),
                     buffers: &attrib_buffer_layouts,
                 },
@@ -467,6 +466,7 @@ fn generate_meshes(
                 }),
                 multisample: wgpu::MultisampleState::default(),
                 multiview: None,
+                cache: None,
             });
 
             let index_data = doc_primitive.indices().map(|indices| {

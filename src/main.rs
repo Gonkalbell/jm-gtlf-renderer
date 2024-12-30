@@ -1,32 +1,6 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use eframe::{egui_wgpu::WgpuConfiguration, wgpu};
-use std::sync::Arc;
-
-fn get_wgpu_options() -> WgpuConfiguration {
-    WgpuConfiguration {
-        device_descriptor: Arc::new(|adapter| {
-            let base_limits = if adapter.get_info().backend == wgpu::Backend::Gl {
-                wgpu::Limits::downlevel_webgl2_defaults()
-            } else {
-                wgpu::Limits::default()
-            };
-            wgpu::DeviceDescriptor {
-                label: Some("egui wgpu device"),
-                required_features: wgpu::Features::default() | wgpu::Features::POLYGON_MODE_LINE,
-                required_limits: wgpu::Limits {
-                    // When using a depth buffer, we have to be able to create a texture
-                    // large enough for the entire surface, and we want to support 4k+ displays.
-                    max_texture_dimension_2d: 8192,
-                    ..base_limits
-                },
-            }
-        }),
-        ..Default::default()
-    }
-}
-
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
@@ -38,7 +12,7 @@ fn main() -> eframe::Result {
             eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon-256.png")[..])
                 .expect("Failed to load icon"),
         ),
-        wgpu_options: get_wgpu_options(),
+        wgpu_options: Default::default(),
         depth_buffer: 32,
         ..Default::default()
     };
@@ -52,29 +26,39 @@ fn main() -> eframe::Result {
 // When compiling to web using trunk:
 #[cfg(target_arch = "wasm32")]
 fn main() {
+    use eframe::wasm_bindgen::JsCast as _;
+
     // Redirect `log` message to `console.log` and friends:
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
 
     let web_options = eframe::WebOptions {
-        wgpu_options: get_wgpu_options(),
+        wgpu_options: Default::default(),
         depth_buffer: 32,
         ..Default::default()
     };
 
     wasm_bindgen_futures::spawn_local(async {
+        let document = web_sys::window()
+            .expect("No window")
+            .document()
+            .expect("No document");
+
+        let canvas = document
+            .get_element_by_id("the_canvas_id")
+            .expect("Failed to find the_canvas_id")
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .expect("the_canvas_id was not a HtmlCanvasElement");
+
         let start_result = eframe::WebRunner::new()
             .start(
-                "the_canvas_id",
+                canvas,
                 web_options,
                 Box::new(|cc| Ok(Box::new(jm_gltf_renderer::RendererApp::new(cc)))),
             )
             .await;
 
         // Remove the loading text and spinner:
-        let loading_text = web_sys::window()
-            .and_then(|w| w.document())
-            .and_then(|d| d.get_element_by_id("loading_text"));
-        if let Some(loading_text) = loading_text {
+        if let Some(loading_text) = document.get_element_by_id("loading_text") {
             match start_result {
                 Ok(_) => {
                     loading_text.remove();
