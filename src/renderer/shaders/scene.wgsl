@@ -38,5 +38,5 @@ fn fs_scene(input: VertexOutput) -> @location(0) vec4f {
     let NDotL = max(dot(N, L), 0.0);
     let surface_color = AMBIENT_COLOR + NDotL;
 
-    return vec4f(surface_color, 1);
+    return vec4f((1.f + N) / 2.f, 1);
 }
