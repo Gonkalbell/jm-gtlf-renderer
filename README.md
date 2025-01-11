@@ -1,4 +1,4 @@
-# eframe template
+# GLTF Scene Renderer
 
 This is just a simple scene renderer for me to learn more about WGPU and other rendering techniques.
 
