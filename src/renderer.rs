@@ -6,7 +6,7 @@ mod shaders;
 use std::sync::Arc;
 
 use eframe::wgpu;
-use glam::Mat4;
+use glam::{Mat3, Mat4};
 use gltf::mesh::Mode;
 use puffin::profile_function;
 use wgpu::{util::DeviceExt, BufferUsages};
@@ -350,13 +350,13 @@ fn generate_nodes(doc: &gltf::Document, device: &wgpu::Device) -> Vec<Node> {
     // Get world transforms
     let mut nodes_to_visit = Vec::new();
     for scene in doc.scenes() {
-        nodes_to_visit.extend(scene.nodes().map(|n| (n, Mat4::default())));
+        nodes_to_visit.extend(scene.nodes().map(|n| (n, Mat4::IDENTITY)));
     }
     let mut world_transforms = vec![Mat4::IDENTITY; doc.nodes().len()];
     while let Some((node, parent_transform)) = nodes_to_visit.pop() {
         let transform = Mat4::from_cols_array_2d(&node.transform().matrix());
         let world_transform = parent_transform * transform;
-        world_transforms[node.index()] = transform;
+        world_transforms[node.index()] = world_transform;
         nodes_to_visit.extend(node.children().map(|n| (n, world_transform)));
     }
     let nodes = doc
@@ -368,7 +368,9 @@ fn generate_nodes(doc: &gltf::Document, device: &wgpu::Device) -> Vec<Node> {
                     label: node.name(),
                     contents: bytemuck::bytes_of(&scene::Node {
                         transform,
-                        normal_transform: Mat4::default(),
+                        normal_transform: Mat4::from_mat3(
+                            Mat3::from_mat4(transform).inverse().transpose(),
+                        ),
                     }),
                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 });
