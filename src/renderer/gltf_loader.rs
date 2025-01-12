@@ -86,8 +86,7 @@ pub(crate) fn generate_meshes(
                                 .stride()
                                 .map(|s| s as u64)
                                 .unwrap_or(format.size());
-                            let (buf_offset, attrib_offset) = if accessor.offset()
-                                >= stride as _
+                            let (buf_offset, attrib_offset) = if accessor.offset() >= stride as _
                                 || stride > device.limits().max_vertex_buffer_array_stride as _
                             {
                                 (accessor.offset(), 0)
@@ -120,46 +119,43 @@ pub(crate) fn generate_meshes(
                         })
                         .collect();
 
-                    let pipeline =
-                        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                            label: doc_mesh.name(),
-                            layout: Some(&scene::create_pipeline_layout(device)),
-                            vertex: wgpu::VertexState {
-                                module: &shader,
-                                entry_point: Some(scene::ENTRY_VS_SCENE),
-                                compilation_options: Default::default(),
-                                buffers: &attrib_buffer_layouts,
+                    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                        label: doc_mesh.name(),
+                        layout: Some(&scene::create_pipeline_layout(device)),
+                        vertex: wgpu::VertexState {
+                            module: &shader,
+                            entry_point: Some(scene::ENTRY_VS_SCENE),
+                            compilation_options: Default::default(),
+                            buffers: &attrib_buffer_layouts,
+                        },
+                        fragment: Some(scene::fragment_state(
+                            &shader,
+                            &scene::fs_scene_entry([Some(color_format.into())]),
+                        )),
+                        primitive: wgpu::PrimitiveState {
+                            topology: match doc_primitive.mode() {
+                                Mode::Points => wgpu::PrimitiveTopology::PointList,
+                                Mode::Lines => wgpu::PrimitiveTopology::LineList,
+                                Mode::LineStrip => wgpu::PrimitiveTopology::LineStrip,
+                                Mode::Triangles => wgpu::PrimitiveTopology::TriangleList,
+                                Mode::TriangleStrip => wgpu::PrimitiveTopology::TriangleStrip,
+                                mode => unimplemented!("format {:?} not supported", mode),
                             },
-                            fragment: Some(scene::fragment_state(
-                                &shader,
-                                &scene::fs_scene_entry([Some(color_format.into())]),
-                            )),
-                            primitive: wgpu::PrimitiveState {
-                                topology: match doc_primitive.mode() {
-                                    Mode::Points => wgpu::PrimitiveTopology::PointList,
-                                    Mode::Lines => wgpu::PrimitiveTopology::LineList,
-                                    Mode::LineStrip => wgpu::PrimitiveTopology::LineStrip,
-                                    Mode::Triangles => wgpu::PrimitiveTopology::TriangleList,
-                                    Mode::TriangleStrip => {
-                                        wgpu::PrimitiveTopology::TriangleStrip
-                                    }
-                                    mode => unimplemented!("format {:?} not supported", mode),
-                                },
-                                cull_mode: Some(wgpu::Face::Back),
-                                front_face: wgpu::FrontFace::Ccw,
-                                ..Default::default()
-                            },
-                            depth_stencil: Some(wgpu::DepthStencilState {
-                                format: DEPTH_FORMAT,
-                                depth_write_enabled: true,
-                                depth_compare: wgpu::CompareFunction::Less,
-                                stencil: wgpu::StencilState::default(),
-                                bias: wgpu::DepthBiasState::default(),
-                            }),
-                            multisample: wgpu::MultisampleState::default(),
-                            multiview: None,
-                            cache: None,
-                        });
+                            cull_mode: Some(wgpu::Face::Back),
+                            front_face: wgpu::FrontFace::Ccw,
+                            ..Default::default()
+                        },
+                        depth_stencil: Some(wgpu::DepthStencilState {
+                            format: DEPTH_FORMAT,
+                            depth_write_enabled: true,
+                            depth_compare: wgpu::CompareFunction::Less,
+                            stencil: wgpu::StencilState::default(),
+                            bias: wgpu::DepthBiasState::default(),
+                        }),
+                        multisample: wgpu::MultisampleState::default(),
+                        multiview: None,
+                        cache: None,
+                    });
 
                     let mut draw_count = vertex_count as u32;
                     let index_data = doc_primitive.indices().map(|indices| {
