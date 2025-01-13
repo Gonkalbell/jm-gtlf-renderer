@@ -7,7 +7,10 @@ mod shaders;
 use std::sync::Arc;
 
 use eframe::wgpu;
+use egui::ahash::HashMap;
 use puffin::profile_function;
+use serde::Deserialize;
+use tokio::sync::watch;
 use wgpu::{util::DeviceExt, BufferUsages};
 
 use camera::ArcBallCamera;
@@ -27,6 +30,24 @@ type NodeBindGroupEntriesParams<'a> = scene::WgpuBindGroup1EntriesParams<'a>;
 type SkyboxBindGroup = skybox::WgpuBindGroup1;
 type SkyboxBindGroupEntries<'a> = skybox::WgpuBindGroup1Entries<'a>;
 type SkyboxBindGroupEntriesParams<'a> = skybox::WgpuBindGroup1EntriesParams<'a>;
+
+pub struct SceneRenderer {
+    camera_buf: wgpu::Buffer,
+    user_camera: ArcBallCamera,
+    camera_bgroup: CameraBindGroup,
+
+    skybox_bgroup: SkyboxBindGroup,
+    skybox_pipeline: wgpu::RenderPipeline,
+
+    scene: watch::Receiver<Option<Scene>>,
+
+    asset_list: watch::Receiver<Option<Vec<ModelLinkInfo>>>,
+}
+
+struct Scene {
+    nodes: Vec<Node>,
+    meshes: Vec<Mesh>,
+}
 
 struct Node {
     mesh_index: usize,
@@ -59,16 +80,13 @@ struct PrimitiveIndexData {
     offset: u64,
 }
 
-pub struct SceneRenderer {
-    camera_buf: wgpu::Buffer,
-    user_camera: ArcBallCamera,
-    camera_bgroup: CameraBindGroup,
-
-    skybox_bgroup: SkyboxBindGroup,
-    skybox_pipeline: wgpu::RenderPipeline,
-
-    nodes: Vec<Node>,
-    meshes: Vec<Mesh>,
+#[derive(Debug, Deserialize)]
+struct ModelLinkInfo {
+    label: String,
+    name: String,
+    screenshot: String,
+    tags: Vec<String>,
+    variants: HashMap<String, String>,
 }
 
 impl SceneRenderer {
@@ -212,6 +230,24 @@ impl SceneRenderer {
 
         let meshes = gltf_loader::generate_meshes(device, doc, buffers, color_format);
 
+        let (sender, scene) = watch::channel(None);
+
+        let (sender, asset_list) = watch::channel(None);
+        tokio::spawn(async move {
+            const ASSETS_URL: &str = "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/model-index.json";
+            let req: Vec<ModelLinkInfo> = reqwest::get(ASSETS_URL)
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            let req = req
+                .into_iter()
+                .filter(|m| m.tags.iter().any(|t| *t == "core"))
+                .collect();
+            sender.send(Some(req)).unwrap();
+        });
+
         Self {
             user_camera,
             camera_buf,
@@ -220,8 +256,9 @@ impl SceneRenderer {
             skybox_bgroup,
             skybox_pipeline,
 
-            nodes,
-            meshes,
+            scene,
+
+            asset_list,
         }
     }
 
@@ -252,25 +289,27 @@ impl SceneRenderer {
 
         self.camera_bgroup.set(rpass);
 
-        for node in &self.nodes {
-            node.bgroup.set(rpass);
-            let mesh = self
-                .meshes
-                .get(node.mesh_index)
-                .expect("Node didn't have a mesh");
-            for primitive in &mesh.primitives {
-                rpass.set_pipeline(&primitive.pipeline);
-                for (i, attrib) in primitive.attrib_buffers.iter().enumerate() {
-                    rpass.set_vertex_buffer(i as _, attrib.buffer.slice(attrib.offset..));
-                }
-                if let Some(index_data) = &primitive.index_data {
-                    rpass.set_index_buffer(
-                        index_data.buffer.slice(index_data.offset..),
-                        index_data.format,
-                    );
-                    rpass.draw_indexed(0..primitive.draw_count, 0, 0..1);
-                } else {
-                    rpass.draw(0..primitive.draw_count, 0..1);
+        if let Some(scene) = self.scene.borrow().as_ref() {
+            for node in &scene.nodes {
+                node.bgroup.set(rpass);
+                let mesh = scene
+                    .meshes
+                    .get(node.mesh_index)
+                    .expect("Node didn't have a mesh");
+                for primitive in &mesh.primitives {
+                    rpass.set_pipeline(&primitive.pipeline);
+                    for (i, attrib) in primitive.attrib_buffers.iter().enumerate() {
+                        rpass.set_vertex_buffer(i as _, attrib.buffer.slice(attrib.offset..));
+                    }
+                    if let Some(index_data) = &primitive.index_data {
+                        rpass.set_index_buffer(
+                            index_data.buffer.slice(index_data.offset..),
+                            index_data.format,
+                        );
+                        rpass.draw_indexed(0..primitive.draw_count, 0, 0..1);
+                    } else {
+                        rpass.draw(0..primitive.draw_count, 0..1);
+                    }
                 }
             }
         }
@@ -291,19 +330,29 @@ impl SceneRenderer {
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    ui.menu_button("File", |ui| {
-                        if ui.button("Quit").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                    });
-
-                    // eframe doesn't support puffin on browser because it might not have a high resolution clock.
-                    let mut are_scopes_on = puffin::are_scopes_on();
-                    ui.toggle_value(&mut are_scopes_on, "Profiler");
-                    puffin::set_scopes_on(are_scopes_on);
-                }
+                ui.menu_button("Scene", |ui| {
+                    if let Some(model_list) = self.asset_list.borrow().as_ref() {
+                        ui.menu_button("Load Kronos Asset", |ui| {
+                            egui::ScrollArea::vertical().show(ui, |ui| {
+                                for model in model_list {
+                                    ui.horizontal(|ui| {
+                                        ui.menu_button(&model.label, |ui| {
+                                            ui.vertical(|ui| {
+                                                for (variant, link) in &model.variants {
+                                                    if ui.button(variant).clicked() {
+                                                        log::debug!("Loading model: {}", link);
+                                                    }
+                                                }
+                                            });
+                                        });
+                                    });
+                                }
+                            });
+                        });
+                    } else {
+                        ui.label("loading");
+                    }
+                });
                 ui.menu_button("Camera", |ui| self.user_camera.run_ui(ui));
             });
         });

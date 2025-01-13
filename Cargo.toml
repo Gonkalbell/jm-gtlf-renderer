@@ -4,7 +4,6 @@ version = "0.1.0"
 authors = ["John Michael Bell <johnmichaelbell@gmail.com>"]
 edition = "2021"
 include = ["LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml"]
-rust-version = "1.81"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -20,7 +19,10 @@ ktx2 = "0.3.0"
 log = "0.4"
 puffin = { version = "0.19.1", features = ["web"] }
 puffin_http = "0.16.1"
+reqwest = { version = "0.12.12", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.135"
+tokio = { version = "1.43.0", features = ["macros", "rt", "rt-multi-thread", "sync"] }
 wgpu = "23.0.1"
 
 [build-dependencies]

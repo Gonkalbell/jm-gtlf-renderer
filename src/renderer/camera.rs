@@ -78,7 +78,7 @@ impl ArcBallCamera {
         egui::Grid::new("Camera").num_columns(2).show(ui, |ui| {
             ui.label("pitch");
             DragValue::new(&mut self.pitch_revs)
-                .suffix(" turns")
+                .suffix("τ")
                 .speed(0.01)
                 .ui(ui);
             ui.end_row();
@@ -86,7 +86,7 @@ impl ArcBallCamera {
 
             ui.label("yaw");
             DragValue::new(&mut self.yaw_revs)
-                .suffix(" turns")
+                .suffix("τ")
                 .speed(0.01)
                 .ui(ui);
             ui.end_row();
@@ -95,13 +95,13 @@ impl ArcBallCamera {
             ui.label("distance");
             DragValue::new(&mut self.dist)
                 .suffix("m")
-                .speed(0.01)
+                .speed(0.1)
                 .ui(ui);
             ui.end_row();
 
             ui.label("vertical FOV");
             DragValue::new(&mut self.fov_y_revs)
-                .suffix(" turns")
+                .suffix("τ")
                 .speed(0.01)
                 .range(0. ..=0.5)
                 .ui(ui);
