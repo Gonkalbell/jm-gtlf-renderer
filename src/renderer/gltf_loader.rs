@@ -1,13 +1,58 @@
 use super::{
     scene, AttribBuffer, Mesh, Node, NodeBindGroup, NodeBindGroupEntries,
-    NodeBindGroupEntriesParams, Primitive, PrimitiveIndexData, DEPTH_FORMAT,
+    NodeBindGroupEntriesParams, Primitive, PrimitiveIndexData, Scene, DEPTH_FORMAT,
 };
 use glam::{Mat3, Mat4};
 use gltf::mesh::Mode;
+use reqwest::Url;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
+use wgpu::BufferUsages;
 
-pub(crate) fn generate_nodes(doc: &gltf::Document, device: &wgpu::Device) -> Vec<Node> {
+pub async fn load_asset(
+    url: Url,
+    device: &wgpu::Device,
+    color_format: wgpu::TextureFormat,
+) -> reqwest::Result<Scene> {
+    // TODO: I'm currently embedding the glb file directly into my binary because I'm too lazy to handle file
+    // loading separately on native and wasm targets. Maybe I should use WASI or some other API like that.
+    // Also, I should load these asynchronously
+    log::info!("requesting {}", &url);
+    let gltf_file = reqwest::get(url.clone()).await?.bytes().await?;
+    log::info!("processing {}", &url);
+
+    let (doc, buffer_data, _image_data) =
+        gltf::import_slice(gltf_file).expect("Failed to load GLTF file");
+
+    let buffers: Vec<_> = doc
+        .views()
+        .map(|view: gltf::buffer::View| {
+            let data = &buffer_data[view.buffer().index()].0;
+            let contents = &data[view.offset()..view.offset() + view.length()];
+            let usage = BufferUsages::COPY_DST | BufferUsages::VERTEX | BufferUsages::INDEX;
+            Arc::new(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: view.name(),
+                    contents,
+                    usage,
+                }),
+            )
+        })
+        .collect();
+
+    // Build Nodes
+
+    let nodes = generate_nodes(&doc, device);
+
+    // Build Meshes
+
+    let meshes = generate_meshes(device, doc, buffers, color_format);
+    log::info!("finished loading {}", &url);
+
+    Ok(Scene { nodes, meshes })
+}
+
+fn generate_nodes(doc: &gltf::Document, device: &wgpu::Device) -> Vec<Node> {
     // Get world transforms
     let mut nodes_to_visit = Vec::new();
     for scene in doc.scenes() {
@@ -51,7 +96,7 @@ pub(crate) fn generate_nodes(doc: &gltf::Document, device: &wgpu::Device) -> Vec
     nodes
 }
 
-pub(crate) fn generate_meshes(
+fn generate_meshes(
     device: &wgpu::Device,
     doc: gltf::Document,
     buffers: Vec<Arc<wgpu::Buffer>>,

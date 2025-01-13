@@ -9,6 +9,7 @@ use std::sync::Arc;
 use eframe::wgpu;
 use egui::ahash::HashMap;
 use puffin::profile_function;
+use reqwest::Url;
 use serde::Deserialize;
 use tokio::sync::watch;
 use wgpu::{util::DeviceExt, BufferUsages};
@@ -16,6 +17,8 @@ use wgpu::{util::DeviceExt, BufferUsages};
 use camera::ArcBallCamera;
 
 use shaders::*;
+
+const ASSETS_BASE_URL: &str = "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/";
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
@@ -91,7 +94,7 @@ struct ModelLinkInfo {
 
 impl SceneRenderer {
     pub fn init(
-        device: &wgpu::Device,
+        device: Arc<wgpu::Device>,
         queue: &wgpu::Queue,
         color_format: wgpu::TextureFormat,
     ) -> Self {
@@ -111,7 +114,7 @@ impl SceneRenderer {
         });
 
         let camera_bgroup = CameraBindGroup::from_bindings(
-            device,
+            &device,
             CameraBindGroupEntries::new(CameraBindGroupEntriesParams {
                 res_camera: camera_buf.as_entire_buffer_binding(),
             }),
@@ -152,7 +155,7 @@ impl SceneRenderer {
         });
 
         let skybox_bgroup = SkyboxBindGroup::from_bindings(
-            device,
+            &device,
             SkyboxBindGroupEntries::new(SkyboxBindGroupEntriesParams {
                 res_texture: &skybox_tview,
                 res_sampler: &device.create_sampler(&wgpu::SamplerDescriptor {
@@ -168,10 +171,10 @@ impl SceneRenderer {
             }),
         );
 
-        let shader = skybox::create_shader_module_embed_source(device);
+        let shader = skybox::create_shader_module_embed_source(&device);
         let skybox_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("skybox"),
-            layout: Some(&skybox::create_pipeline_layout(device)),
+            layout: Some(&skybox::create_pipeline_layout(&device)),
             vertex: skybox::vertex_state(&shader, &skybox::vs_skybox_entry()),
             fragment: Some(skybox::fragment_state(
                 &shader,
@@ -195,47 +198,19 @@ impl SceneRenderer {
 
         // Load the GLTF scene
 
-        // TODO: I'm currently embedding the glb file directly into my binary because I'm too lazy to handle file
-        // loading separately on native and wasm targets. Maybe I should use WASI or some other API like that.
-        // Also, I should load these asynchronously
-        let glb_file = include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            // "/assets/models/AntiqueCamera/glTF-Binary/AntiqueCamera.glb"
-            "/assets/models/Buggy/glTF-Binary/Buggy.glb"
-        ));
-        let (doc, buffer_data, _image_data) =
-            gltf::import_slice(glb_file).expect("Failed to load GLTF file");
-
-        let buffers: Vec<_> = doc
-            .views()
-            .map(|view: gltf::buffer::View| {
-                let data = &buffer_data[view.buffer().index()].0;
-                let contents = &data[view.offset()..view.offset() + view.length()];
-                let usage = BufferUsages::COPY_DST | BufferUsages::VERTEX | BufferUsages::INDEX;
-                Arc::new(
-                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: view.name(),
-                        contents,
-                        usage,
-                    }),
-                )
-            })
-            .collect();
-
-        // Build Nodes
-
-        let nodes = gltf_loader::generate_nodes(&doc, device);
-
-        // Build Meshes
-
-        let meshes = gltf_loader::generate_meshes(device, doc, buffers, color_format);
-
         let (sender, scene) = watch::channel(None);
+        tokio::spawn(async move {
+            let url = Url::parse(ASSETS_BASE_URL).unwrap().join("AntiqueCamera/glTF-Binary/AntiqueCamera.glb").unwrap();
+            let scene = gltf_loader::load_asset(url, &device, color_format).await.unwrap();
+            sender.send(Some(scene)).unwrap();
+        });
+
+        // Load the asset list
 
         let (sender, asset_list) = watch::channel(None);
         tokio::spawn(async move {
-            const ASSETS_URL: &str = "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/model-index.json";
-            let req: Vec<ModelLinkInfo> = reqwest::get(ASSETS_URL)
+            let url = Url::parse(ASSETS_BASE_URL).unwrap().join("model-index.json").unwrap();
+            let req: Vec<ModelLinkInfo> = reqwest::get(url)
                 .await
                 .unwrap()
                 .json()
