@@ -11,14 +11,15 @@ use egui::ahash::HashMap;
 use puffin::profile_function;
 use reqwest::Url;
 use serde::Deserialize;
-use tokio::sync::watch;
-use wgpu::{util::DeviceExt, BufferUsages};
+use tokio::sync::Mutex;
+use wgpu::util::DeviceExt;
 
 use camera::ArcBallCamera;
 
 use shaders::*;
 
-const ASSETS_BASE_URL: &str = "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/";
+const ASSETS_BASE_URL: &str =
+    "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/";
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
@@ -42,9 +43,9 @@ pub struct SceneRenderer {
     skybox_bgroup: SkyboxBindGroup,
     skybox_pipeline: wgpu::RenderPipeline,
 
-    scene: watch::Receiver<Option<Scene>>,
+    scene: Arc<Mutex<Option<Scene>>>,
 
-    asset_list: watch::Receiver<Option<Vec<ModelLinkInfo>>>,
+    asset_list: Arc<Mutex<Vec<ModelLinkInfo>>>,
 }
 
 struct Scene {
@@ -198,29 +199,34 @@ impl SceneRenderer {
 
         // Load the GLTF scene
 
-        let (sender, scene) = watch::channel(None);
+        let scene = Arc::new(Mutex::new(None));
+        let scene_clone = scene.clone();
         tokio::spawn(async move {
-            let url = Url::parse(ASSETS_BASE_URL).unwrap().join("AntiqueCamera/glTF-Binary/AntiqueCamera.glb").unwrap();
-            let scene = gltf_loader::load_asset(url, &device, color_format).await.unwrap();
-            sender.send(Some(scene)).unwrap();
+            let url = Url::parse(ASSETS_BASE_URL)
+                .unwrap()
+                .join("AntiqueCamera/glTF-Binary/AntiqueCamera.glb")
+                .unwrap();
+            let loaded_scene = gltf_loader::load_asset(url, &device, color_format)
+                .await
+                .unwrap();
+            scene_clone.lock().await.replace(loaded_scene);
         });
 
         // Load the asset list
 
-        let (sender, asset_list) = watch::channel(None);
+        let asset_list = Arc::new(Mutex::new(Vec::new()));
+        let asset_list_clone = asset_list.clone();
         tokio::spawn(async move {
-            let url = Url::parse(ASSETS_BASE_URL).unwrap().join("model-index.json").unwrap();
-            let req: Vec<ModelLinkInfo> = reqwest::get(url)
-                .await
+            let url = Url::parse(ASSETS_BASE_URL)
                 .unwrap()
-                .json()
-                .await
+                .join("model-index.json")
                 .unwrap();
+            let req: Vec<ModelLinkInfo> = reqwest::get(url).await.unwrap().json().await.unwrap();
             let req = req
                 .into_iter()
                 .filter(|m| m.tags.iter().any(|t| *t == "core"))
                 .collect();
-            sender.send(Some(req)).unwrap();
+            *asset_list_clone.lock().await = req;
         });
 
         Self {
@@ -264,26 +270,29 @@ impl SceneRenderer {
 
         self.camera_bgroup.set(rpass);
 
-        if let Some(scene) = self.scene.borrow().as_ref() {
-            for node in &scene.nodes {
-                node.bgroup.set(rpass);
-                let mesh = scene
-                    .meshes
-                    .get(node.mesh_index)
-                    .expect("Node didn't have a mesh");
-                for primitive in &mesh.primitives {
-                    rpass.set_pipeline(&primitive.pipeline);
-                    for (i, attrib) in primitive.attrib_buffers.iter().enumerate() {
-                        rpass.set_vertex_buffer(i as _, attrib.buffer.slice(attrib.offset..));
-                    }
-                    if let Some(index_data) = &primitive.index_data {
-                        rpass.set_index_buffer(
-                            index_data.buffer.slice(index_data.offset..),
-                            index_data.format,
-                        );
-                        rpass.draw_indexed(0..primitive.draw_count, 0, 0..1);
-                    } else {
-                        rpass.draw(0..primitive.draw_count, 0..1);
+        let scene_lock = self.scene.try_lock();
+        if let Some(scene_guard) = scene_lock.ok() {
+            if let Some(scene) = scene_guard.as_ref() {
+                for node in &scene.nodes {
+                    node.bgroup.set(rpass);
+                    let mesh = scene
+                        .meshes
+                        .get(node.mesh_index)
+                        .expect("Node didn't have a mesh");
+                    for primitive in &mesh.primitives {
+                        rpass.set_pipeline(&primitive.pipeline);
+                        for (i, attrib) in primitive.attrib_buffers.iter().enumerate() {
+                            rpass.set_vertex_buffer(i as _, attrib.buffer.slice(attrib.offset..));
+                        }
+                        if let Some(index_data) = &primitive.index_data {
+                            rpass.set_index_buffer(
+                                index_data.buffer.slice(index_data.offset..),
+                                index_data.format,
+                            );
+                            rpass.draw_indexed(0..primitive.draw_count, 0, 0..1);
+                        } else {
+                            rpass.draw(0..primitive.draw_count, 0..1);
+                        }
                     }
                 }
             }
@@ -294,7 +303,12 @@ impl SceneRenderer {
         rpass.draw(0..3, 0..1);
     }
 
-    pub fn run_ui(&mut self, ctx: &egui::Context) {
+    pub fn run_ui(
+        &mut self,
+        ctx: &egui::Context,
+        device: &Arc<wgpu::Device>,
+        color_format: wgpu::TextureFormat,
+    ) {
         profile_function!();
 
         if !ctx.wants_keyboard_input() && !ctx.wants_pointer_input() {
@@ -306,16 +320,34 @@ impl SceneRenderer {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("Scene", |ui| {
-                    if let Some(model_list) = self.asset_list.borrow().as_ref() {
+                    if let Some(model_list) = self.asset_list.try_lock().ok() {
                         ui.menu_button("Load Kronos Asset", |ui| {
                             egui::ScrollArea::vertical().show(ui, |ui| {
-                                for model in model_list {
+                                for model in model_list.iter() {
                                     ui.horizontal(|ui| {
                                         ui.menu_button(&model.label, |ui| {
                                             ui.vertical(|ui| {
-                                                for (variant, link) in &model.variants {
+                                                for (variant, file) in &model.variants {
                                                     if ui.button(variant).clicked() {
-                                                        log::debug!("Loading model: {}", link);
+                                                        let scene_clone = self.scene.clone();
+                                                        let device = device.clone();
+                                                        let url = Url::parse(ASSETS_BASE_URL)
+                                                            .unwrap()
+                                                            .join(&format!(
+                                                                "{}/{}/{}",
+                                                                &model.name, variant, file
+                                                            ))
+                                                            .unwrap();
+                                                        tokio::spawn(async move {
+                                                            let scene = gltf_loader::load_asset(
+                                                                url,
+                                                                &device,
+                                                                color_format,
+                                                            )
+                                                            .await
+                                                            .unwrap();
+                                                            scene_clone.lock().await.replace(scene);
+                                                        });
                                                     }
                                                 }
                                             });

@@ -46,15 +46,16 @@ impl eframe::App for RendererApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        if let Some(renderer) = frame
+        let render_state = frame
             .wgpu_render_state()
-            .expect("WGPU is not properly initialized")
+            .expect("WGPU is not properly initialized");
+        if let Some(renderer) = render_state
             .renderer
             .write()
             .callback_resources
             .get_mut::<SceneRenderer>()
         {
-            renderer.run_ui(ctx);
+            renderer.run_ui(ctx, &render_state.device, render_state.target_format);
         }
 
         // Run our custom rendering as a callback. Normally eframe is set up to allow you to handle custom rendering in

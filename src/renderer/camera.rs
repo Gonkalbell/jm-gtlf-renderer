@@ -93,10 +93,7 @@ impl ArcBallCamera {
             self.yaw_revs = self.yaw_revs.rem_euclid(1.);
 
             ui.label("distance");
-            DragValue::new(&mut self.dist)
-                .suffix("m")
-                .speed(0.1)
-                .ui(ui);
+            DragValue::new(&mut self.dist).suffix("m").speed(0.1).ui(ui);
             ui.end_row();
 
             ui.label("vertical FOV");
