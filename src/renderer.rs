@@ -201,7 +201,7 @@ impl SceneRenderer {
 
         let scene = Arc::new(Mutex::new(None));
         let scene_clone = scene.clone();
-        tokio::spawn(async move {
+        crate::spawn(async move {
             let url = Url::parse(ASSETS_BASE_URL)
                 .unwrap()
                 .join("AntiqueCamera/glTF-Binary/AntiqueCamera.glb")
@@ -216,7 +216,7 @@ impl SceneRenderer {
 
         let asset_list = Arc::new(Mutex::new(Vec::new()));
         let asset_list_clone = asset_list.clone();
-        tokio::spawn(async move {
+        crate::spawn(async move {
             let url = Url::parse(ASSETS_BASE_URL)
                 .unwrap()
                 .join("model-index.json")
@@ -338,7 +338,7 @@ impl SceneRenderer {
                                                                 &model.name, variant, file
                                                             ))
                                                             .unwrap();
-                                                        tokio::spawn(async move {
+                                                        crate::spawn(async move {
                                                             let scene = gltf_loader::load_asset(
                                                                 url,
                                                                 &device,
