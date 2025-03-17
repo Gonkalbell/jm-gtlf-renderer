@@ -64,6 +64,7 @@ impl eframe::App for RendererApp {
         ctx.layer_painter(LayerId::background()).add(
             eframe::egui_wgpu::Callback::new_paint_callback(ctx.available_rect(), CustomCallback),
         );
+        ctx.request_repaint();
     }
 }
 
