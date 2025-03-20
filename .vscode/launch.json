@@ -7,16 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'jm-gltf-renderer'",
+            "name": "Debug unit tests in library 'jmb-gltf-renderer'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=jm-gltf-renderer"
+                    "--package=jmb-gltf-renderer"
                 ],
                 "filter": {
-                    "name": "jm-gltf-renderer",
+                    "name": "jmb-gltf-renderer",
                     "kind": "lib"
                 }
             },
@@ -26,15 +26,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'jm-gltf-renderer'",
+            "name": "Debug executable 'jmb-gltf-renderer'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=jm-gltf-renderer",
-                    "--package=jm-gltf-renderer"
+                    "--bin=jmb-gltf-renderer",
+                    "--package=jmb-gltf-renderer"
                 ],
                 "filter": {
-                    "name": "jm-gltf-renderer",
+                    "name": "jmb-gltf-renderer",
                     "kind": "bin"
                 }
             },
@@ -44,16 +44,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'jm-gltf-renderer'",
+            "name": "Debug unit tests in executable 'jmb-gltf-renderer'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=jm-gltf-renderer",
-                    "--package=jm-gltf-renderer"
+                    "--bin=jmb-gltf-renderer",
+                    "--package=jmb-gltf-renderer"
                 ],
                 "filter": {
-                    "name": "jm-gltf-renderer",
+                    "name": "jmb-gltf-renderer",
                     "kind": "bin"
                 }
             },
