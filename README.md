@@ -10,9 +10,9 @@ I am using [eframe_template](https://github.com/emilk/eframe_template) since I w
 
 This application can run natively on desktop platforms (Windows, MacOS, and Linux) as well as on the web using wasm.
 
-You can try the wasm version [here](https://gonkalbell.github.io/jmb-gtlf-renderer/)
+You can try the wasm version [here](https://gonkalbell.github.io/jmb-gltf-renderer/)
 
-Or you can download prebuilt binaries for your OS [here](https://github.com/Gonkalbell/jmb-gtlf-renderer/releases/tag/main-release)
+Or you can download prebuilt binaries for your OS [here](https://github.com/Gonkalbell/jmb-gltf-renderer/releases/tag/main-release)
 
 ## Building
 
