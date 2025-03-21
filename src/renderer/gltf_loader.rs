@@ -69,22 +69,26 @@ fn generate_nodes(doc: &gltf::Document, device: &wgpu::Device) -> Vec<Node> {
         .nodes()
         .zip(world_transforms.iter())
         .filter_map(|(node, transform)| node.mesh().map(|m| (m, transform)))
-        .flat_map(|(mesh, transform)| {
-            mesh.primitives()
-                .map(|p| (p.bounding_box(), transform.clone()))
-        })
+        .flat_map(|(mesh, transform)| mesh.primitives().map(|p| (p.bounding_box(), *transform)))
         .fold((Vec3::MAX, Vec3::MIN), |(min, max), (bbox, transform)| {
-            (min.min(transform.transform_point3(bbox.min.into())), max.max(transform.transform_point3(bbox.max.into())))
+            (
+                min.min(transform.transform_point3(bbox.min.into())),
+                max.max(transform.transform_point3(bbox.max.into())),
+            )
         });
 
     let center = (bbox_min + bbox_max) * 0.5;
     let extent = (bbox_max - bbox_min) * 0.5;
     let max_extent = extent.max_element();
-    let scale_factor = if max_extent > 0.0 { 1.0 / max_extent } else { 1.0 };
+    let scale_factor = if max_extent > 0.0 {
+        1.0 / max_extent
+    } else {
+        1.0
+    };
     let inv_bounding_box_matrix = Mat4::from_scale_rotation_translation(
         Vec3::splat(scale_factor),
-        glam::Quat::IDENTITY,
-        scale_factor * -center
+        Quat::IDENTITY,
+        scale_factor * -center,
     );
 
     for transform in world_transforms.iter_mut() {

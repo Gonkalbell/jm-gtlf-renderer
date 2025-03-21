@@ -20,7 +20,7 @@ impl Default for ArcBallCamera {
     fn default() -> Self {
         Self {
             center_pos: Vec3::ZERO,
-            pitch_revs:0.,
+            pitch_revs: 0.,
             yaw_revs: 0.,
             dist: 2.,
 

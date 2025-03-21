@@ -88,7 +88,8 @@ struct PrimitiveIndexData {
 struct ModelLinkInfo {
     label: String,
     name: String,
-    screenshot: String,
+    #[serde(rename = "screenshot")]
+    _screenshot: String,
     tags: Vec<String>,
     variants: HashMap<String, String>,
 }
@@ -271,7 +272,7 @@ impl SceneRenderer {
         self.camera_bgroup.set(rpass);
 
         let scene_lock = self.scene.try_lock();
-        if let Some(scene_guard) = scene_lock.ok() {
+        if let Ok(scene_guard) = scene_lock {
             if let Some(scene) = scene_guard.as_ref() {
                 for node in &scene.nodes {
                     node.bgroup.set(rpass);
@@ -320,7 +321,7 @@ impl SceneRenderer {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("Scene", |ui| {
-                    if let Some(model_list) = self.asset_list.try_lock().ok() {
+                    if let Ok(model_list) = self.asset_list.try_lock() {
                         ui.menu_button("Load Kronos Asset", |ui| {
                             egui::ScrollArea::vertical().show(ui, |ui| {
                                 for model in model_list.iter() {
